@@ -39,6 +39,9 @@ f.audio_input = ProtoField.uint8("mra.routing_map_input","Audio Input")
 f.audio_output = ProtoField.uint8("mra.routing_map_output","Audio Output")
 
 f.zone_output = ProtoField.uint8("mra.zone_output","Zone Output")
+f.volume_value = ProtoField.uint8("mra.volume_value","Volume Value")
+
+f.do_not_disturb_setting = ProtoField.uint8("mra.do_not_disturb_setting", "Do Not Disturb Setting", base.BOOLEAN)
 
 f.major_version = ProtoField.uint8("mra.major_version", "Major Version Number")
 f.minor_version = ProtoField.uint8("mra.minor_version", "Minor Version Number")
@@ -73,18 +76,22 @@ function MRAPROTO.dissector (buffer, pinfo, tree)
     local data = false
     local data_tree = nil
 
-    if (response) then
-	local result = buffer(offset, 1)
-	subtree:add(f.result, result)
-        offset = offset + 1
-	result = result:uint()
-    end
 
-    if (result and length:uint()>2 or not result and length:uint()>1) then
+     if (response) then
+        pinfo.cols.info = "MRA Response: " ..commands[command:uint()]
+ 	result = buffer(offset, 1)
+ 	subtree:add(f.result, result)
+        offset = offset + 1
+ 	result = result:uint()
+     else
+        pinfo.cols.info = "MRA Request: " ..commands[command:uint()]
+     end
+ 
+    if (result~=0 and length:uint()>2) then
         data = buffer (offset, length:uint() - 2)
-	data_tree = subtree:add (f.data, data)
+        data_tree = subtree:add (f.data, data)
         offset = offset + length:uint() - 2
-    end
+     end
 
     if (request and length:uint() > 1) then
         data = buffer (offset, length:uint() - 1)
@@ -110,14 +117,39 @@ function MRAPROTO.dissector (buffer, pinfo, tree)
     end
 
     if (request and command:uint() == 0x21) then
-	subtree:add(f.zone_output, data:range(0,1))
---	offset = offset + 1
+	data_tree:add(f.zone_output, data:range(0,1))
+	offset = offset + 1
+    end
+
+    if (response and command:uint() == 0x21) then
+	data_tree:add(f.zone_output, data:range(0,1))
+	data_tree:add(f.volume_value, data:range(1,1))
+    end
+
+    if (request and command:uint() == 0x25) then
+	data_tree:add(f.zone_output, data:range(0,1))
+	offset = offset + 1
+    end
+
+    if (response and command:uint() == 0x25) then
+	data_tree:add(f.zone_output, data:range(0,1))
+	data_tree:add(f.do_not_disturb_setting, data:range(1,1))
     end
 
     if (request and command:uint() == 0x26) then 
         data_tree:add(f.audio_input, data:range(0,1))
---	offset = offset + 1
+	offset = offset + 1
         data_tree:add(f.audio_output, data:range(1,1))
+    end
+
+    if (request and command:uint() == 0x27) then
+	data_tree:add(f.zone_output, data:range(0,1))
+	offset = offset + 1
+    end
+
+    if (response and command:uint() == 0x27) then
+	data_tree:add(f.zone_output, data:range(0,1))
+	data_tree:add(f.audio_input, data:range(1,1))
     end
 
 
